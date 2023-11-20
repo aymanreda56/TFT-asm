@@ -1,4 +1,9 @@
+
+
 GPIOE_BASE EQU 0x40021000	;Base of port E
+GPIOC_BASE EQU 0x40020800
+GPIOC_PUPDR EQU GPIOC_BASE + 0x0C
+GPIOC_IDR EQU GPIOC_BASE + 0x10
 
 ;this is where you write your data as an output into the port
 GPIOE_ODR EQU 0x40021014    ;output register of port E, PE0 - PE15
@@ -6,6 +11,8 @@ GPIOE_ODR EQU 0x40021014    ;output register of port E, PE0 - PE15
 RCC_AHB1ENR EQU 0x40023830 ;this register is responsible for enabling certain ports, by making the clock affect the target port.
 
 INTERVAL EQU 0x186004		;just a number to perform the delay. this number takes roughly 1 second to decrement until it reaches 0
+
+
 	
 
 ;the following are pins connected from our EasyMX board to the TFT
@@ -28,31 +35,99 @@ WHITE 	EQU  	0xFFFF
 GREEN2 	EQU 	0x2FA4
 CYAN2 	EQU  	0x07FF
 
+	
 
 	EXPORT __main
+	IMPORT DIO
+	
 	
 
 	AREA	MYCODE, CODE, READONLY
-
-
+	ENTRY
+	
 __main FUNCTION
+
 
 	BL SETUP
 
-	MOV R0, #200
-	MOV R1, #240
+
+
+	MOV R0, #0
+	MOV R1, #0
+	MOV R3, #320
+	MOV R4, #240
+	LDR R10, =WHITE
+	BL DRAW_RECTANGLE_FILLED
+
+
+	bl delay_1_second
+
+
+	MOV R0, #0
+	MOV R1, #0
 	LDR R10, =RED
-	MOV R3, #200
+	MOV R3, #320
 	MOV R4, #0
 
+Draw_multiple_lines_horizontal
 	BL DRAW_LINE
+	mov r0, #0
+	add r1, r1, #3
+	LDR R10, =RED
+	mov R3, #320
+	add R4, r4, #3
+	cmp r4, #240
+	blt Draw_multiple_lines_horizontal
+	
+	bl delay_1_second
+	bl delay_1_second
+	bl delay_1_second
+
+
+	MOV R0, #0
+	MOV R1, #0
+	MOV R3, #320
+	MOV R4, #240
+	LDR R10, =WHITE
+	BL DRAW_RECTANGLE_FILLED
+
+
+	MOV R0, #0
+	MOV R1, #0
+	LDR R10, =RED
+	MOV R3, #0
+	MOV R4, #240
+Draw_multiple_lines_vertical
+	BL DRAW_LINE
+	add r0, r0, #4
+	mov r1, #0
+	LDR R10, =RED
+	add r3, r3, #4
+	mov r4, #240
+	cmp r0, #320
+	blt Draw_multiple_lines_vertical
+	
+	bl delay_1_second
+	bl delay_1_second
+	bl delay_1_second
+	
+
+
+
+	MOV R0, #0
+	MOV R1, #0
+	MOV R3, #320
+	MOV R4, #240
+	LDR R10, =RED
+
+	BL DRAW_RECTANGLE_FILLED
 
 
 STARTAG
-	MOV R0, #40
-	MOV R1, #40
-	MOV R3, #180
-	MOV R4, #180
+	MOV R0, #0
+	MOV R1, #0
+	MOV R3, #320
+	MOV R4, #240
 	LDR R10, =RED
 
 	BL DRAW_RECTANGLE_FILLED
@@ -66,7 +141,50 @@ STARTAG
 	LDR R10, =MAGENTA
 	BL DRAW_RECTANGLE_FILLED
 
-	B STARTAG
+
+
+
+
+	MOV R0, #0
+	MOV R1, #0
+	MOV R3, #320
+	MOV R4, #240
+	LDR R10, =WHITE
+
+	BL DRAW_RECTANGLE_FILLED
+		bl delay_1_second
+	
+	bl DRAW_SNAKE
+
+
+
+
+	bl delay_1_second
+
+	MOV R0, #160
+	MOV R1, #6
+	MOV R3, #163
+	MOV R4, #230
+	LDR R10, =BLACK
+	BL DRAW_RECTANGLE_FILLED
+
+	bl delay_1_second
+
+	MOV R0, #120
+	MOV R1, #210
+	MOV R3, #240
+	MOV R4, #212
+	LDR R10, =BLACK
+	BL DRAW_RECTANGLE_FILLED
+
+
+	
+
+
+	
+	BL DRAW_IMAGE
+
+	;B STARTAG
 
 
 ;SKIP ALL FUNCTION DECLARATION
@@ -168,6 +286,49 @@ LCD_DATA_WRITE
 
 
 
+OPTIMIZED_DATA_WRITE
+	PUSH {LR}
+	;this function writes Data to the TFT, the data is read from R2
+	;it writes HIGH to RS first to specify that we are writing data not a command.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;; SETTING RS to 1 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	LDR r1, =GPIOE_ODR
+	LDR r0, [r1]
+	ORR r0, r0, #0x00001000
+	STRH r0, [r1]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; SETTING WR to 0 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	LDR r1, =GPIOE_ODR
+	LDR r0, [r1]
+	AND r0, r0, #0xFFFFF7FF
+	STRH r0, [r1]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; HERE YOU PUT YOUR DATA which is in R2 TO PE0-7 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	LDR r1, =GPIOE_ODR
+	STRB r2, [r1]			;only write the lower byte to PE0-7
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;; SETTING WR to 1 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	LDR r1, =GPIOE_ODR
+	LDR r0, [r1]
+	ORR r0, r0, #0x00000800
+	STRH r0, [r1]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+
+	POP {PC}
+;#####################################################################################################################################################################
+
+
+
+
+
+
+
 
 
 ;#####################################################################################################################################################################
@@ -263,6 +424,20 @@ LCD_INIT
 	MOV R2, #0x55
 	BL LCD_DATA_WRITE
 
+
+	
+	;FRAME RATE (119HZ)
+	MOV R2, #0xB1
+	BL LCD_COMMAND_WRITE
+
+	;SET DIVISION RATIO TO FOSC
+	MOV R2, #0x00
+	BL LCD_DATA_WRITE
+
+	;SET CLOCKS PER LINE TO 119HZ
+	MOV R2, #0x10
+	BL LCD_DATA_WRITE
+
 	;SLEEP OUT | DATASHEET PAGE 245
 	MOV R2, #0x11
 	BL LCD_COMMAND_WRITE
@@ -281,6 +456,8 @@ LCD_INIT
 	;COLOR INVERSION OFF
 	MOV R2, #0x21
 	BL LCD_COMMAND_WRITE
+
+
 
 	;MEMORY WRITE | DATASHEET PAGE 245
 	MOV R2, #0x2C
@@ -406,7 +583,49 @@ DRAWPIXEL
 ;#####################################################################################################################################################################
 
 
+;####################################################################################################################################################################
+TEST
+	PUSH {R0-R4, r10, LR}
 
+	;CHIP SELECT ACTIVE, WRITE LOW TO CS
+	LDR r3, =GPIOE_ODR
+	LDR r4, [r3]
+	AND r4, r4, #0xFFFF7FFF
+	STR r4, [r3]
+
+	;SETTING PARAMETERS FOR FUNC 'ADDRESS_SET' CALL
+	MOV R3, R0 ;X1
+	ADD R4, R0, #50 ;X2
+	MOV R0, R1 ;Y1
+	ADD R1, R0, #50 ;Y2
+
+	BL ADDRESS_SET
+
+	MOV R12, #200
+
+	;MEMORY WRITE
+	MOV R2, #0x2C
+	BL LCD_COMMAND_WRITE
+
+LOOPYSS
+	MOV R2, R10
+	LSR R2, #8
+	BL LCD_DATA_WRITE
+	MOV R2, R10
+	BL LCD_DATA_WRITE
+	SUBS R12, R12, #1
+	CMP R12, #0
+	BGT LOOPYSS
+
+
+	;MEMORY WRITE
+	MOV R2, #0x2C
+	BL LCD_COMMAND_WRITE
+
+
+
+	POP {R0-R4, r10, PC}
+;###################################################################################################################################################################
 
 
 
@@ -658,10 +877,9 @@ END_LINE
 
 
 
-
-
-
-
+	B SKIPED
+	LTORG
+SKIPED
 
 
 
@@ -718,15 +936,56 @@ DRAW_RECTANGLE_FILLED
 	;R4 = Y2
 	;R10 = COLOR
 
+
+
+	PUSH {R0-R4}
+;just reorder arguments to set the address (column & page)
+	mov r5, r0
+	mov r6, r3
+	mov r0, r1
+	mov r1, r4
+	mov r3, r5
+	mov r4, r6
+	;THE NEXT FUNCTION TAKES Y1, Y2, X1, X2
+	;R0 = Y1
+	;R1 = Y2
+	;R3 = X1
+	;R4 = X2
+	bl ADDRESS_SET
+	
+	POP {R0-R4}
+
+	SUBS R3, R3, R0
+	add r3, r3, #1
+	SUBS R4, R4, R1
+	add r4, r4, #1
+	MUL R3, R3, R4
+
+
+;MEMORY WRITE
+	MOV R2, #0x2C
+	BL LCD_COMMAND_WRITE
+
+
 RECT_FILL_LOOP
-	BL DRAW_RECTANGLE
-	ADD R1, R1, #1
-	SUBS R4, R4, #1
-	ADD R0, R0, #1
+	MOV R2, R10
+	LSR R2, #8
+	BL OPTIMIZED_DATA_WRITE
+	MOV R2, R10
+	BL OPTIMIZED_DATA_WRITE
+
 	SUBS R3, R3, #1
-	CMP R0, R3
-	BGT END_RECT_FILL
-	B RECT_FILL_LOOP
+	CMP R3, #0
+	BGT RECT_FILL_LOOP
+
+	;BL DRAW_RECTANGLE
+	;ADD R1, R1, #1
+	;SUBS R4, R4, #1
+	;ADD R0, R0, #1
+	;SUBS R3, R3, #1
+	;CMP R0, R3
+	;BGT END_RECT_FILL
+	;B RECT_FILL_LOOP
 
 
 END_RECT_FILL
@@ -739,6 +998,276 @@ END_RECT_FILL
 
 
 
+
+
+DRAW_IMAGE
+	PUSH {R0-R12, LR}
+	
+	MOV R0, #91
+	MOV R1, #185
+	MOV R3, #101
+	MOV R4, #260
+	bl ADDRESS_SET
+
+	LDR R5, =DIO
+	MOV R7, #15000
+
+
+	;MEMORY WRITE
+	MOV R2, #0x2C
+	BL LCD_COMMAND_WRITE
+
+IMAGE_LOOP
+	LDR R6, [R5], #2
+
+
+	MOV R2, R6
+	LSR R2, #8
+	BL LCD_DATA_WRITE
+	MOV R2, R6
+	BL LCD_DATA_WRITE
+
+	SUBS R7, R7, #1
+	CMP R7, #0
+	BNE IMAGE_LOOP
+
+
+
+	POP {R0-R12, PC}
+
+
+
+
+
+
+
+
+
+
+DRAW_SNAKE
+	push {r0-r12, LR}
+
+	bl CONFIGURE_INPUTS
+	mov r11, #26
+	mov r12, #206
+	bl DRAW_APPLE
+
+	mov r0, #300
+	mov r1, #150
+	mov r3, #300
+	mov r4, #150
+
+horiz_loop
+	
+;Winning Checks
+	subs r5, r0, r11
+	cmp r5, #0
+	bgt skipnegation1
+	mvn r5, r5
+	add r5, r5, #1
+
+skipnegation1
+	cmp r5, #11
+	blt second_win_check
+	b losing_check
+
+second_win_check
+	subs r5, r1, r12
+	bgt skipnegation2
+	mvn r5, r5
+	add r5, r5, #1
+	
+skipnegation2
+	cmp r5, #13
+	blt win_game
+	b draw_snake_cont
+
+;Losing Checks
+losing_check
+	cmp r0, #0
+	ble lose_game
+
+	cmp r0, #320
+	bgt lose_game
+	
+	cmp r1, #0
+	ble lose_game
+
+	cmp r1, #240
+	bgt lose_game
+
+
+draw_snake_cont
+	add R3, r0, #3
+	add R4, r1, #3
+	LDR R10, =BLACK
+	BL DRAW_RECTANGLE_FILLED
+	BL delay_10_milli_second
+	BL delay_10_milli_second
+	bl recieve_input
+
+	cmp r6, #0 ;go left
+	bne snake_left
+
+	cmp r8, #0 ;go right
+	bne snake_right
+
+	cmp r7, #0 ;go up
+	bne snake_up
+
+	cmp r9, #0 ;go down
+	bne snake_down
+
+	b cont_snake
+
+
+snake_left
+	subs r0, r0, #3
+	b horiz_loop
+
+snake_up
+	subs r1, r1, #3
+	b horiz_loop
+
+snake_right
+	adds r0, r0, #3
+	B horiz_loop
+
+snake_down
+	adds r1, r1, #3
+cont_snake
+	B horiz_loop
+
+
+win_game
+	bl DRAW_IMAGE
+stop1 b stop1
+
+lose_game
+	MOV R0, #0
+	mov R1,	#0
+	mov R3, #320
+	mov R4, #240
+	LDR R10, =RED
+	BL DRAW_RECTANGLE_FILLED
+stop2 b stop2
+	pop {r0-r12, pc}
+
+
+
+
+
+
+
+
+
+
+
+CONFIGURE_INPUTS
+	push{r0-r12, lr}
+	
+	;Make the clock affect port C by enabling the corresponding bit (the third bit) in RCC_AHB1ENR register
+	LDR r1, =RCC_AHB1ENR
+	LDR r0, [r1, #0]
+	ORR r0, r0, #0x04
+	STR r0, [r1, #0]
+	
+	
+	;Make the GPIO C mode as input (00 for each pin)
+	LDR r0, =GPIOC_BASE
+	mov r1, #0x0
+	STR r1, [r0]
+
+	pop {r0-r12, pc}
+
+
+recieve_input
+	push{r0-r3, lr}
+
+	ldr r0, =GPIOC_IDR
+	ldr r1, [r0]
+	mov r3, #1
+	and r6, r1, r3, lsl #6 ;test for PC 6
+	cmp r6, #0
+	bne go_left
+
+	mov r3, #1
+	and r8, r1, r3, lsl #2 ;test for PC 2
+	cmp r8, #0
+	bne go_right
+
+	mov r3, #1
+	and r7, r1, r3, lsl #3 ;test for PC 3
+	cmp r7, #0
+	bne go_up
+
+	mov r3, #1
+	and r9, r1, r3    ;test for PC 1
+	cmp r9, #0
+	bne go_down
+
+	b cont_input
+
+go_left
+	mov r8, #0
+	mov r7, #0
+	mov r9, #0
+	mov r6, #1
+	b cont_input
+
+go_right
+	mov r6, #0
+	mov r7, #0
+	mov r9, #0
+	mov r8, #1
+	b cont_input
+
+go_up
+	mov r6, #0
+	mov r7, #1
+	mov r9, #0
+	mov r8, #0
+	b cont_input
+
+
+go_down
+	mov r6, #0
+	mov r7, #0
+	mov r9, #1
+	mov r8, #0
+	b cont_input
+
+cont_input
+	pop {r0-r3, pc}
+
+
+
+
+
+
+
+DRAW_APPLE
+;this function draws an apple a the x,y coordinates which are passed inside the r11, r12 respectively
+; size of apple is 11x14 pixels
+	push {r0-r12, lr}
+
+
+	MOV R0, r11
+	add R1, r12, #4
+	add R3, r11, #11
+	add R4, r12, #14
+	LDR R10, =RED
+	BL DRAW_RECTANGLE_FILLED
+
+	add R0, r11, #4
+	MOV R1, r12
+	add R3, r11, #6
+	add R4, r12, #8
+	LDR R10, =GREEN
+	BL DRAW_RECTANGLE_FILLED
+
+
+	pop {r0-r12, PC}
 
 
 
